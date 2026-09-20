@@ -1,0 +1,18 @@
+version: "3.8"
+
+services:
+  protocol-dashboard:
+    build: .
+    container_name: protocol_dashboard
+    restart: unless-stopped
+    ports:
+      - "8501:8501"   # Streamlit UI
+      - "8000:8000"   # FastAPI Backend
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8501
+      - API_PORT=8000
+      - HEADLESS=true
+    volumes:
+      # Mount server videos for persistent media uploads across container restarts
+      - ./backend/videos:/app/backend/videos

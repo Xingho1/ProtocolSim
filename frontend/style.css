@@ -1,0 +1,532 @@
+/* Minimalistic Light Theme for Protocol Simulators */
+
+@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --bg-app: #f8fafc;
+  --bg-card: #ffffff;
+  --bg-subtle: #f1f5f9;
+  --border-light: #e2e8f0;
+  --border-medium: #cbd5e1;
+  --text-main: #0f172a;
+  --text-muted: #64748b;
+  --text-subtle: #94a3b8;
+  --primary: #2563eb;
+  --primary-subtle: #eff6ff;
+  --success: #16a34a;
+  --success-subtle: #f0fdf4;
+  --warning: #d97706;
+  --warning-subtle: #fffbeb;
+  --danger: #dc2626;
+  --danger-subtle: #fef2f2;
+}
+
+/* Global Font & Resets */
+html, body, [class*="css"], .stApp {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
+  background-color: var(--bg-app) !important;
+  color: var(--text-main) !important;
+}
+
+code, pre, .mono-font {
+  font-family: 'Fira Code', monospace !important;
+}
+
+/* Main Container Padding */
+.block-container {
+  padding-top: 1.2rem !important;
+  padding-bottom: 2rem !important;
+  max-width: 98% !important;
+}
+
+/* Simple Minimal Header */
+.header-simple {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.header-simple-title {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: -0.3px;
+}
+
+.header-simple-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #15803d;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  padding: 3px 10px;
+  border-radius: 9999px;
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  background-color: #16a34a;
+  border-radius: 50%;
+}
+
+/* Pane Borders & Container */
+[data-testid="stVerticalBlockBorderWrapper"] {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 10px !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+  padding: 4px !important;
+}
+
+.panel-header {
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: #475569;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 8px;
+}
+
+/* Step Ladder Visualization (Minimalist Light) */
+.ladder-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 14px 0;
+}
+
+.ladder-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 6px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-left: 3px solid #cbd5e1;
+  transition: all 0.15s ease;
+}
+
+.ladder-item.active {
+  background: #eff6ff !important;
+  border-color: #bfdbfe !important;
+  border-left: 3px solid #2563eb !important;
+  box-shadow: 0 1px 4px rgba(37, 99, 235, 0.08) !important;
+}
+
+.ladder-item.passed {
+  border-left: 3px solid #16a34a !important;
+  background: #fafafa;
+}
+
+/* Simplified Protocol Pipeline Chunks */
+.pipeline-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 10px 0;
+}
+
+.pipeline-chunk {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px 16px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+  transition: all 0.2s ease;
+}
+
+.pipeline-chunk.active-chunk {
+  background: #f8faff !important;
+  border: 2px solid #2563eb !important;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.1) !important;
+}
+
+.pipeline-chunk.passed-chunk {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-left: 4px solid #16a34a !important;
+}
+
+.pipeline-chunk.pending-chunk {
+  background: #fafbfc;
+  border: 1px solid #e2e8f0;
+  opacity: 0.85;
+}
+
+.step-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+}
+
+.badge-dns { background: #f0fdfa; color: #0f766e; border: 1px solid #99f6e4; }
+.badge-http { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+.badge-smtp { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
+.badge-stream { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+
+.arrow-c2s {
+  color: #2563eb;
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.arrow-s2c {
+  color: #7c3aed;
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.beaming-arrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* Wire inspector console */
+.wire-console {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 12px;
+  color: #0f172a;
+  font-family: 'Fira Code', monospace;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+/* Live Wire Packet Flight HUD (Minimalist Light) */
+.wire-flight-hud {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 12px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.wire-flight-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.74rem;
+  font-family: 'Fira Code', monospace;
+  color: #64748b;
+  margin-bottom: 8px;
+}
+
+.wire-flight-track {
+  position: relative;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 6px;
+}
+
+.wire-physical-cable {
+  position: absolute;
+  left: 30px;
+  right: 30px;
+  height: 2px;
+  background: #e2e8f0;
+  border-radius: 1px;
+}
+
+.wire-node-box {
+  z-index: 2;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 4px 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.packet-capsule {
+  position: absolute;
+  z-index: 3;
+  padding: 2px 10px;
+  border-radius: 9999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  font-family: 'Fira Code', monospace;
+  white-space: nowrap;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+
+.packet-capsule.c2s {
+  background: #eff6ff;
+  border: 1px solid #93c5fd;
+  color: #1d4ed8;
+  animation: fly-c2s 1.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.packet-capsule.s2c {
+  background: #f5f3ff;
+  border: 1px solid #c4b5fd;
+  color: #6d28d9;
+  animation: fly-s2c 1.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes fly-c2s {
+  0% { left: 15%; opacity: 0; transform: scale(0.9); }
+  20% { opacity: 1; transform: scale(1.0); }
+  80% { opacity: 1; transform: scale(1.0); }
+  100% { left: 75%; opacity: 0; transform: scale(0.9); }
+}
+
+@keyframes fly-s2c {
+  0% { left: 75%; opacity: 0; transform: scale(0.9); }
+  20% { opacity: 1; transform: scale(1.0); }
+  80% { opacity: 1; transform: scale(1.0); }
+  100% { left: 15%; opacity: 0; transform: scale(0.9); }
+}
+
+/* Custom button styles */
+.stButton > button {
+  border-radius: 6px !important;
+  font-weight: 500 !important;
+  transition: all 0.15s ease !important;
+}
+
+/* Clean metrics styling */
+[data-testid="stMetricValue"] {
+  font-size: 1.25rem !important;
+  font-weight: 700 !important;
+  color: #0f172a !important;
+}
+
+[data-testid="stMetricLabel"] {
+  font-size: 0.78rem !important;
+  color: #64748b !important;
+}
+
+/* ========================================================================== */
+/* HIGHLIGHTED PROTOCOL SELECTION (Segmented Button Pills)                    */
+/* ========================================================================== */
+[data-testid="stRadio"] {
+  background: #f1f5f9;
+  padding: 6px;
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  margin-bottom: 12px;
+}
+
+[data-testid="stRadio"] > label {
+  display: none !important; /* Hide redundant label text if needed */
+}
+
+[data-testid="stRadio"] div[role="radiogroup"] {
+  display: flex !important;
+  flex-direction: row !important;
+  gap: 6px !important;
+  width: 100% !important;
+}
+
+[data-testid="stRadio"] div[role="radiogroup"] > label {
+  flex: 1 1 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+  padding: 8px 12px !important;
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 7px !important;
+  cursor: pointer !important;
+  font-weight: 600 !important;
+  font-size: 0.86rem !important;
+  color: #475569 !important;
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03) !important;
+}
+
+[data-testid="stRadio"] div[role="radiogroup"] > label:hover {
+  background: #f8fafc !important;
+  border-color: #93c5fd !important;
+  color: #1d4ed8 !important;
+  transform: translateY(-1px);
+}
+
+/* Active Highlighted Pill */
+[data-testid="stRadio"] div[role="radiogroup"] > label:has(input:checked) {
+  background: #2563eb !important;
+  border-color: #1d4ed8 !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  box-shadow: 0 3px 8px rgba(37, 99, 235, 0.28) !important;
+}
+
+[data-testid="stRadio"] div[role="radiogroup"] > label:has(input:checked) p,
+[data-testid="stRadio"] div[role="radiogroup"] > label:has(input:checked) span,
+[data-testid="stRadio"] div[role="radiogroup"] > label:has(input:checked) div {
+  color: #ffffff !important;
+}
+
+/* Hide native radio circles for button appearance */
+[data-testid="stRadio"] div[role="radiogroup"] > label div[data-testid="stMarkdownContainer"] {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+}
+
+[data-testid="stRadio"] div[role="radiogroup"] > label div:first-child:not([data-testid="stMarkdownContainer"]) {
+  display: none !important;
+}
+
+/* ========================================================================== */
+/* SCROLLABLE CODE BOX (Browsing HTML Source View)                            */
+/* ========================================================================== */
+.scrollable-code-box {
+  max-height: 380px;
+  overflow-y: auto;
+  overflow-x: auto;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 14px;
+  font-family: 'Fira Code', monospace;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: #0f172a;
+  white-space: pre-wrap;
+  word-break: break-all;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.scrollable-code-box::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+.scrollable-code-box::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+.scrollable-code-box::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.scrollable-code-box::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* ========================================================================== */
+/* SECTION HEADINGS (Mail & Other Forms)                                      */
+/* ========================================================================== */
+.form-section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #1e293b;
+  background: #f1f5f9;
+  border-left: 3px solid #2563eb;
+  padding: 6px 10px;
+  border-radius: 0 5px 5px 0;
+  margin: 14px 0 8px 0;
+}
+
+.form-section-header.warning-theme {
+  border-left-color: #d97706;
+}
+
+.form-section-header.success-theme {
+  border-left-color: #16a34a;
+}
+
+/* ========================================================================== */
+/* TOOLTIP & INFO BADGES                                                      */
+/* ========================================================================== */
+.tooltip-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: help;
+  position: relative;
+  border-bottom: 1px dotted #94a3b8;
+}
+
+
+/* ========================================================================== */
+/* LOADING ANIMATION (Transmitting packets feedback)                         */
+/* ========================================================================== */
+.wire-transmitting-loader {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 12px 18px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  color: #1d4ed8;
+  font-size: 0.82rem;
+  font-weight: 600;
+  margin: 8px 0;
+  animation: pulse-border 1.5s infinite;
+}
+
+@keyframes pulse-border {
+  0% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.2); }
+  70% { box-shadow: 0 0 0 6px rgba(37, 99, 235, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); }
+}
+
+.loading-pulse-ring {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #2563eb;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin-loader 0.8s linear infinite;
+}
+
+@keyframes spin-loader {
+  to { transform: rotate(360deg); }
+}
+
+/* Enhance default Streamlit spinner */
+div[data-testid="stSpinner"] {
+  background: #eff6ff !important;
+  border: 1px solid #bfdbfe !important;
+  border-radius: 8px !important;
+  padding: 10px 14px !important;
+  color: #1d4ed8 !important;
+  font-weight: 600 !important;
+  font-size: 0.84rem !important;
+}
+
