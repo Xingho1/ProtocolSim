@@ -10,7 +10,7 @@ def is_status_error(status: Any) -> bool:
     if not status:
         return False
     s = str(status).upper()
-    if "NOERROR" in s or s.startswith("200") or "206" in s or "OK" in s:
+    if any(k in s for k in ["NOERROR", "OK", "SYN-ACK", "ESTABLISHED", "FIN-ACK", "CLOSED", "INGESTED", "STREAMING"]) or s.startswith(("200", "206", "220", "221", "235", "250", "354")):
         return False
     return any(err in s for err in ["NXDOMAIN", "FAIL", "ERROR", "SERVFAIL", "REFUSED"]) or s.startswith(("4", "5"))
 
@@ -103,6 +103,10 @@ def render_sequence_ladder(steps: List[Dict[str, Any]], current_step_index: int)
             badge_class = "badge-http"
         elif "smtp" in proto_lower:
             badge_class = "badge-smtp"
+        elif "tcp" in proto_lower:
+            badge_class = "badge-tcp"
+        elif "udp" in proto_lower:
+            badge_class = "badge-udp"
         else:
             badge_class = "badge-stream"
 
@@ -404,6 +408,14 @@ def render_pipeline_chunks(steps: List[Dict[str, Any]], current_step_index: int)
             badge_bg = "#fffbeb"
             badge_color = "#b45309"
             badge_border = "#fde68a"
+        elif "tcp" in proto_lower:
+            badge_bg = "#f5f3ff"
+            badge_color = "#6d28d9"
+            badge_border = "#ddd6fe"
+        elif "udp" in proto_lower:
+            badge_bg = "#fff7ed"
+            badge_color = "#c2410c"
+            badge_border = "#ffedd5"
         else:
             badge_bg = "#f0fdf4"
             badge_color = "#15803d"
@@ -420,6 +432,7 @@ def render_pipeline_chunks(steps: List[Dict[str, Any]], current_step_index: int)
         cmd = step.get("command", "")
         summary = step.get("summary", "")
         status_val = step.get("status_code")
+        layer_name = step.get("layer", "")
 
         # Render each step inside its own native card container
         with st.container(border=True):
@@ -435,11 +448,16 @@ def render_pipeline_chunks(steps: List[Dict[str, Any]], current_step_index: int)
                     else:
                         status_html = f'<span style="background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; padding: 1px 7px; border-radius: 4px; font-size: 0.72rem; font-weight: 600; margin-left: 6px;">{html.escape(str(status_val))}</span>'
 
+                layer_badge = ""
+                if layer_name:
+                    layer_badge = f'<span style="background: #f8fafc; color: #475569; border: 1px solid #e2e8f0; font-size: 0.67rem; font-weight: 600; padding: 2px 7px; border-radius: 4px; font-family: monospace;">{html.escape(layer_name)}</span>'
+
                 header_html = (
                     f'<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">'
                     f'<span style="font-weight: 700; font-size: 0.82rem; color: #0f172a; font-family: monospace;">Step {step_num:02d}</span>'
                     f'<span style="background: {badge_bg}; color: {badge_color}; border: 1px solid {badge_border}; font-size: 0.68rem; font-weight: 700; padding: 2px 7px; border-radius: 4px; text-transform: uppercase;">{html.escape(proto)}</span>'
                     f'<span style="font-size: 0.74rem; font-weight: 600; color: {dir_color}; font-family: monospace;">{dir_text}</span>'
+                    f'{layer_badge}'
                     f'{status_html}'
                     f'</div>'
                 )

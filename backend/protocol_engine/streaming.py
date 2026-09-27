@@ -129,181 +129,129 @@ def _generate_server_file_trace(req: StreamRequest) -> ProtocolTraceResponse:
         raw_hex_preview = "00 00 00 18 66 74 79 70 69 73 6F 6D"
 
     client_endpoint = "Frontend Player (127.0.0.1:54320)"
-    server_endpoint = "FastAPI Video Server (127.0.0.1:8000)"
+    server_endpoint = "UDP Media Server (127.0.0.1:5004)"
 
     steps: List[ProtocolStep] = []
     t = 0.0
 
-    # Step 1: TCP Handshake (SYN, SYN-ACK, ACK)
+    # Step 1: UDP Datagram Stream Request / Initialization
     steps.append(
         ProtocolStep(
             step_number=1,
-            timestamp_ms=t,
-            protocol="TCP",
-            layer="Transport (L4 TCP 3-Way Handshake)",
+            timestamp_ms=round(t, 1),
+            protocol="UDP",
+            layer="Transport (L4 UDP Datagram)",
             direction="c2s",
             source_node=client_endpoint,
             dest_node=server_endpoint,
-            command="TCP [SYN] Seq=0 Win=65535 MSS=1460 WS=256",
+            command=f"UDP Datagram: Stream Request [File: {target_video.filename}, Chunk #{seg_idx}]",
             status_code=None,
-            summary=f"Player establishes reliable L4 TCP socket with video server at 127.0.0.1:8000",
+            summary=f"Player transmits connectionless UDP datagram to port 5004 requesting video chunk #{seg_idx} (Zero handshake latency, 8-byte header)",
             details={
-                "Flags": "[SYN]",
-                "Window Size": "65,535 bytes",
-                "MSS": "1460 bytes (Standard MTU 1500)",
+                "Transport": "UDP (User Datagram Protocol)",
+                "Connection": "Connectionless (No 3-way handshake)",
+                "Source Port": 54320,
+                "Dest Port": 5004,
+                "Header Size": "8 bytes (Minimal overhead vs TCP 20-60 bytes)",
+                "Checksum": "0x5E8B",
+                "Length": "48 bytes",
             },
-            raw_wire="TCP SYN: Sport=54320 Dport=8000 Seq=0 Ack=0 Win=65535",
-            duration_ms=6.5,
+            raw_wire=f"UDP Header: Sport=54320 Dport=5004 Len=48 Csum=0x5E8B\nPayload: REQ_CHUNK id={seg_idx} file={target_video.filename} action={req.action}\r\n",
+            duration_ms=4.5,
         )
     )
-    t += 6.5
+    t += 4.5
 
-    # Step 2: TCP Connection Established
+    # Step 2: UDP Packetization & Header Inspection
     steps.append(
         ProtocolStep(
             step_number=2,
-            timestamp_ms=t,
-            protocol="TCP",
-            layer="Transport (L4 TCP Handshake Complete)",
+            timestamp_ms=round(t, 1),
+            protocol="UDP",
+            layer="Transport (L4 UDP Packetization)",
             direction="s2c",
             source_node=server_endpoint,
             dest_node=client_endpoint,
-            command="TCP [SYN, ACK] Seq=0 Ack=1 Win=65535",
-            status_code="ESTABLISHED",
-            summary="Server accepts TCP socket channel for continuous media streaming",
-            details={"Flags": "[SYN, ACK]", "Status": "Socket ESTABLISHED"},
-            raw_wire="TCP SYN-ACK: Sport=8000 Dport=54320 Seq=0 Ack=1 Win=65535",
-            duration_ms=5.2,
+            command=f"UDP Packet Header: Chunk #{seg_idx} ({format_bytes(chunk_len)}) Range: {start_byte}-{end_byte}",
+            status_code="200 UDP-STREAM",
+            summary=f"UDP media server packetizes {target_video.format} bitstream into sequence-numbered UDP datagrams without connection setup overhead",
+            details={
+                "Transport": "UDP",
+                "Datagram Sequence": f"#{seg_idx}",
+                "Range": f"{start_byte}-{end_byte} ({format_bytes(chunk_len)})",
+                "Payload Type": f"Video/{target_video.format}",
+                "Header Overhead": "8 bytes (vs TCP 20-60 bytes)",
+                "Flow Control": "Rate-paced UDP burst",
+            },
+            raw_wire=f"UDP Datagram Header:\n  Source Port: 5004\n  Dest Port: 54320\n  Length: {min(chunk_len + 8, 65535)} bytes\n  Checksum: 0x82A1\nVideo Header Preview: {raw_hex_preview[:36]}...\r\n",
+            duration_ms=6.8,
         )
     )
-    t += 5.2
+    t += 6.8
 
-    # Step 3: Client HTTP Range Request
-    req_uri = f"/api/stream/video/{target_video.filename}"
-    raw_range_req = (
-        f"GET {req_uri} HTTP/1.1\r\n"
-        f"Host: 127.0.0.1:8000\r\n"
-        f"Range: bytes={start_byte}-{end_byte}\r\n"
-        f"Accept: {mime_type}, video/*;q=0.9, */*;q=0.8\r\n"
-        f"User-Agent: Mozilla/5.0 (HTML5 Media Source Engine)\r\n"
-        f"Connection: keep-alive\r\n\r\n"
-    )
+    # Step 3: UDP Binary Media Stream Delivery (Real-time Transmission)
     steps.append(
         ProtocolStep(
             step_number=3,
-            timestamp_ms=t,
-            protocol="HTTP/1.1",
-            layer="Application (L7 HTTP Range Request)",
-            direction="c2s",
-            source_node=client_endpoint,
-            dest_node=server_endpoint,
-            command=f"GET {req_uri} (Range: bytes={start_byte}-{end_byte})",
-            status_code=None,
-            summary=f"HTML5 video player requests chunk #{seg_idx} ({format_bytes(chunk_len)}) via HTTP Range header",
+            timestamp_ms=round(t, 1),
+            protocol="UDP",
+            layer="Transport (L4 UDP Stream Transmission)",
+            direction="s2c",
+            source_node=server_endpoint,
+            dest_node=client_endpoint,
+            command=f"UDP Media Burst: Transmitting {format_bytes(chunk_len)} bitstream datagrams",
+            status_code="STREAMING",
+            summary=f"Server streams {format_bytes(chunk_len)} payload directly to player jitter buffer without waiting for acknowledgements",
             details={
-                "Method": "GET",
-                "Range Header": f"bytes={start_byte}-{end_byte}",
-                "Requested Bytes": chunk_len,
-                "Segment Index": seg_idx,
+                "Transport": "UDP",
+                "File": target_video.filename,
+                "Chunk Size": format_bytes(chunk_len),
+                "Transmission Mode": "Real-time UDP Stream",
+                "Progress": f"{round((end_byte / file_size) * 100, 1)}%",
+                "Hex Signature": raw_hex_preview[:48],
             },
-            raw_wire=raw_range_req,
-            duration_ms=12.0,
+            raw_wire=f"[UDP BINARY MEDIA PAYLOAD: {chunk_len} bytes]\nUDP Header: 8 bytes | Data: {chunk_len} bytes\nHex Header:\n{raw_hex_preview}...\n",
+            duration_ms=18.5,
         )
     )
-    t += 12.0
+    t += 18.5
 
-    # Step 4: Server HTTP 206 Partial Content Response Header
-    raw_206_resp = (
-        f"HTTP/1.1 206 Partial Content\r\n"
-        f"Content-Type: {mime_type}\r\n"
-        f"Content-Range: bytes {start_byte}-{end_byte}/{file_size}\r\n"
-        f"Content-Length: {chunk_len}\r\n"
-        f"Accept-Ranges: bytes\r\n"
-        f"Connection: keep-alive\r\n\r\n"
-    )
+    # Step 4: UDP Player Buffer & Jitter Telemetry
     steps.append(
         ProtocolStep(
             step_number=4,
-            timestamp_ms=t,
-            protocol="HTTP/1.1",
-            layer="Application (L7 Partial Content)",
-            direction="s2c",
-            source_node=server_endpoint,
-            dest_node=client_endpoint,
-            command=f"HTTP/1.1 206 Partial Content (bytes {start_byte}-{end_byte}/{file_size})",
-            status_code="206 Partial Content",
-            summary=f"Server streams media chunk: bytes {start_byte} to {end_byte} of total {format_bytes(file_size)}",
-            details={
-                "Status Code": "206 Partial Content",
-                "Content-Type": mime_type,
-                "Content-Range": f"bytes {start_byte}-{end_byte}/{file_size}",
-                "Content-Length": f"{chunk_len} bytes",
-                "Total File Size": format_bytes(file_size),
-            },
-            raw_wire=raw_206_resp,
-            duration_ms=15.0,
-        )
-    )
-    t += 15.0
-
-    # Step 5: Binary Media Payload Delivery
-    steps.append(
-        ProtocolStep(
-            step_number=5,
-            timestamp_ms=t,
-            protocol="MEDIA-STREAM",
-            layer=f"Payload ({target_video.format} Bitstream Chunks)",
-            direction="s2c",
-            source_node=server_endpoint,
-            dest_node=client_endpoint,
-            command=f"Stream Delivery: {format_bytes(chunk_len)} binary frame payload",
-            status_code="200 STREAMING",
-            summary=f"Buffered {format_bytes(chunk_len)} into HTML5 MediaSource buffer. Hex Header: [{raw_hex_preview[:32]}...]",
-            details={
-                "File": target_video.filename,
-                "Chunk Transferred": format_bytes(chunk_len),
-                "Hex Signature": raw_hex_preview[:48],
-                "Progress": f"{round((end_byte / file_size) * 100, 1)}%",
-            },
-            raw_wire=f"[BINARY VIDEO PAYLOAD: {chunk_len} bytes]\nHex Header:\n{raw_hex_preview}...\n",
-            duration_ms=22.0,
-        )
-    )
-    t += 22.0
-
-    # Step 6: Player TCP Window ACK / Buffer Status
-    action_text = "Stream Active (Buffer Healthy)" if req.action == "play" else f"Playback State: {req.action.upper()}"
-    steps.append(
-        ProtocolStep(
-            step_number=6,
-            timestamp_ms=t,
-            protocol="TCP",
-            layer="Transport (Flow Control & Acknowledgement)",
+            timestamp_ms=round(t, 1),
+            protocol="UDP",
+            layer="Transport (L4 UDP Datagram Ingestion)",
             direction="c2s",
             source_node=client_endpoint,
             dest_node=server_endpoint,
-            command=f"TCP [ACK] Window Update ({action_text})",
-            status_code="ACK",
-            summary=f"Player acknowledges chunk delivery. Buffer healthy, playback action: {req.action}",
+            command=f"UDP Telemetry: Chunk #{seg_idx} Ingested (Action: {req.action.upper()})",
+            status_code="INGESTED",
+            summary=f"Player jitter buffer receives UDP datagram stream. Zero retransmission delay ensures smooth continuous media playback without head-of-line blocking.",
             details={
+                "Transport": "UDP",
                 "Action": req.action,
-                "Buffered Chunk": f"#{seg_idx}",
-                "Bytes Received": f"{end_byte + 1} / {file_size}",
+                "Ingested Chunk": f"#{seg_idx}",
+                "Retransmission Delay": "0 ms (Unacknowledged / Low Latency)",
+                "Jitter Buffer": "Healthy",
+                "Packet Loss": "0.0%",
             },
-            raw_wire=f"TCP ACK: Ack={end_byte + 1} Win=131072 Action={req.action}",
-            duration_ms=8.0,
+            raw_wire=f"UDP Telemetry: Ingested chunk={seg_idx} bytes={chunk_len} action={req.action} jitter=1.2ms loss=0.0%\r\n",
+            duration_ms=5.0,
         )
     )
 
     return ProtocolTraceResponse(
         mode="streaming",
         title=f"Server Video Stream: {target_video.filename}",
-        summary=f"Streaming '{target_video.filename}' ({format_bytes(file_size)}) from server folder via HTTP 206 Range requests. Chunk #{seg_idx} ({format_bytes(chunk_len)}) delivered.",
+        summary=f"Streaming '{target_video.filename}' ({format_bytes(file_size)}) from server folder via connectionless L4 UDP datagrams. Chunk #{seg_idx} ({format_bytes(chunk_len)}) delivered with zero handshake latency.",
         total_steps=len(steps),
         steps=steps,
         metadata={
             "source_type": "server_file",
             "video_file": target_video.filename,
+            "transport": "UDP",
             "total_bytes": file_size,
             "total_formatted": format_bytes(file_size),
             "range_start": start_byte,

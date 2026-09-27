@@ -50,37 +50,115 @@ def generate_browsing_trace(req: BrowseRequest) -> ProtocolTraceResponse:
     dns_endpoint = dns_source
 
     if dns_failed:
-        # Step 1: DNS Query
+        t = 0.0
+        # Step 1: TCP SYN for DNS
+        step1 = ProtocolStep(
+            step_number=1,
+            timestamp_ms=t,
+            protocol="TCP",
+            layer="Transport (L4 TCP 3-Way Handshake)",
+            direction="c2s",
+            source_node=client_endpoint,
+            dest_node=dns_endpoint,
+            command=f"TCP [SYN] Seq=0 Win=65535 MSS=1460 (Port 53/DNS)",
+            status_code=None,
+            summary=f"Client initiates reliable L4 TCP handshake with DNS resolver at port 53 (RFC 7766 DNS-over-TCP)",
+            details={
+                "Transport": "TCP port 53",
+                "Flags": "[SYN]",
+                "Mode": "RFC 7766 DNS over TCP",
+                "Source Port": 54192,
+                "Dest Port": 53,
+                "Win": 65535,
+                "MSS": 1460,
+            },
+            raw_wire=f"TCP SYN: Sport=54192 Dport=53 Seq=0 Ack=0 Flags=[SYN] Win=65535 MSS=1460\r\n",
+            duration_ms=10.0,
+        )
+        t += 10.0
+
+        # Step 2: TCP SYN-ACK for DNS
+        step2 = ProtocolStep(
+            step_number=2,
+            timestamp_ms=t,
+            protocol="TCP",
+            layer="Transport (L4 TCP 3-Way Handshake)",
+            direction="s2c",
+            source_node=dns_endpoint,
+            dest_node=client_endpoint,
+            command="TCP [SYN, ACK] Seq=0 Ack=1 Win=65535",
+            status_code="SYN-ACK",
+            summary="DNS resolver accepts and acknowledges TCP connection for reliable query transport",
+            details={
+                "Transport": "TCP port 53",
+                "Flags": "[SYN, ACK]",
+                "Status": "SYN_RECEIVED",
+                "Source Port": 53,
+                "Dest Port": 54192,
+                "Seq": 0,
+                "Ack": 1,
+            },
+            raw_wire="TCP SYN-ACK: Sport=53 Dport=54192 Seq=0 Ack=1 Flags=[SYN, ACK] Win=65535\r\n",
+            duration_ms=9.5,
+        )
+        t += 9.5
+
+        # Step 3: TCP ACK for DNS
+        step3 = ProtocolStep(
+            step_number=3,
+            timestamp_ms=t,
+            protocol="TCP",
+            layer="Transport (L4 TCP Handshake Established)",
+            direction="c2s",
+            source_node=client_endpoint,
+            dest_node=dns_endpoint,
+            command="TCP [ACK] Seq=1 Ack=1 (Connection ESTABLISHED)",
+            status_code="ESTABLISHED",
+            summary="TCP 3-way handshake established with DNS resolver on port 53",
+            details={
+                "Transport": "TCP port 53",
+                "Flags": "[ACK]",
+                "Status": "ESTABLISHED",
+                "Source Port": 54192,
+                "Dest Port": 53,
+            },
+            raw_wire="TCP ACK: Sport=54192 Dport=53 Seq=1 Ack=1 Flags=[ACK]\r\n",
+            duration_ms=6.0,
+        )
+        t += 6.0
+
+        # Step 4: DNS Query (over TCP)
         raw_dns_query = (
             f";; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: {tx_id}\n"
             f";; flags: rd; QUERY: 1, ANSWER: 0, AUTHORITY: 0, ADDITIONAL: 0\n"
             f";; QUESTION SECTION:\n"
             f";{domain}.                    IN      A"
         )
-        step1 = ProtocolStep(
-            step_number=1,
-            timestamp_ms=0.0,
+        step4 = ProtocolStep(
+            step_number=4,
+            timestamp_ms=t,
             protocol="DNS",
-            layer="Application (L7) over UDP (L4)",
+            layer="Application (L7) over TCP (L4)",
             direction="c2s",
             source_node=client_endpoint,
             dest_node=dns_endpoint,
-            command=f"Standard query {tx_id} A {domain}",
+            command=f"Standard query {tx_id} A {domain} (over TCP)",
             status_code=None,
-            summary=f"Client queries DNS recursive resolver for IPv4 address of '{domain}'",
+            summary=f"Client sends DNS query for IPv4 address of '{domain}' over established L4 TCP connection",
             details={
                 "Transaction ID": tx_id,
                 "Query Type": "A (IPv4)",
                 "Class": "IN (Internet)",
                 "Domain": domain,
                 "Recursion Desired": True,
-                "Transport": "UDP port 53",
+                "Transport": "TCP port 53 (RFC 7766)",
             },
             raw_wire=raw_dns_query,
             duration_ms=18.4,
         )
+        t += 18.4
 
-        # Step 2: DNS Response with Failure (NXDOMAIN)
+        # Step 5: DNS Response with Failure (NXDOMAIN)
         raw_dns_resp = (
             f";; ->>HEADER<<- opcode: QUERY, status: NXDOMAIN, id: {tx_id}\n"
             f";; flags: qr rd ra; QUERY: 1, ANSWER: 0, AUTHORITY: 0, ADDITIONAL: 0\n"
@@ -90,11 +168,11 @@ def generate_browsing_trace(req: BrowseRequest) -> ProtocolTraceResponse:
             f";; RCODE: 3 (NXDOMAIN / Non-Existent Domain)\n"
             f";; Error: {dns_error_msg}"
         )
-        step2 = ProtocolStep(
-            step_number=2,
-            timestamp_ms=18.4,
+        step5 = ProtocolStep(
+            step_number=5,
+            timestamp_ms=t,
             protocol="DNS",
-            layer="Application (L7) over UDP (L4)",
+            layer="Application (L7) over TCP (L4)",
             direction="s2c",
             source_node=dns_endpoint,
             dest_node=client_endpoint,
@@ -108,10 +186,46 @@ def generate_browsing_trace(req: BrowseRequest) -> ProtocolTraceResponse:
                 "Domain": domain,
                 "Resolution Result": "FAILED (Address does not exist or lookup failed)",
                 "Resolved IP": None,
-                "Transport": "UDP port 53",
+                "Transport": "TCP port 53",
             },
             raw_wire=raw_dns_resp,
             duration_ms=16.5,
+        )
+        t += 16.5
+
+        # Step 6: TCP FIN-ACK for DNS
+        step6 = ProtocolStep(
+            step_number=6,
+            timestamp_ms=t,
+            protocol="TCP",
+            layer="Transport (L4 TCP Connection Teardown)",
+            direction="c2s",
+            source_node=client_endpoint,
+            dest_node=dns_endpoint,
+            command="TCP [FIN, ACK] DNS Query Complete, Closing Socket",
+            status_code="FIN-ACK",
+            summary="Client gracefully closes TCP connection to DNS resolver",
+            details={"Transport": "TCP port 53", "Flags": "[FIN, ACK]", "Status": "FIN_WAIT_1"},
+            raw_wire="TCP FIN-ACK: Sport=54192 Dport=53 Flags=[FIN, ACK]\r\n",
+            duration_ms=6.0,
+        )
+        t += 6.0
+
+        # Step 7: TCP ACK for DNS
+        step7 = ProtocolStep(
+            step_number=7,
+            timestamp_ms=t,
+            protocol="TCP",
+            layer="Transport (L4 TCP Connection Teardown)",
+            direction="s2c",
+            source_node=dns_endpoint,
+            dest_node=client_endpoint,
+            command="TCP [ACK] DNS Socket Closed",
+            status_code="CLOSED",
+            summary="DNS resolver acknowledges socket teardown and closes transmission channel",
+            details={"Transport": "TCP port 53", "Flags": "[ACK]", "Status": "CLOSED"},
+            raw_wire="TCP ACK: Sport=53 Dport=54192 Flags=[ACK]\r\n",
+            duration_ms=5.5,
         )
 
         error_html = (
@@ -156,9 +270,9 @@ def generate_browsing_trace(req: BrowseRequest) -> ProtocolTraceResponse:
         return ProtocolTraceResponse(
             mode="browsing",
             title=f"Web Browsing Trace: {domain} (DNS Resolution Failed)",
-            summary=f"DNS lookup failed for '{domain}': {dns_error_msg}. The address does not exist or DNS resolver failed. HTTP request aborted.",
-            total_steps=2,
-            steps=[step1, step2],
+            summary=f"DNS lookup over L4 TCP failed for '{domain}': {dns_error_msg}. The address does not exist or DNS resolver failed. HTTP request aborted.",
+            total_steps=7,
+            steps=[step1, step2, step3, step4, step5, step6, step7],
             html_content=error_html,
             metadata={
                 "domain": domain,
@@ -167,6 +281,7 @@ def generate_browsing_trace(req: BrowseRequest) -> ProtocolTraceResponse:
                 "status_code": "DNS_PROBE_FINISHED_NXDOMAIN",
                 "is_live_fetch": req.fetch_real,
                 "failed": True,
+                "transport": "TCP",
                 "error": dns_error_msg,
                 "error_type": "DNS_NXDOMAIN",
             },
@@ -224,8 +339,91 @@ def generate_browsing_trace(req: BrowseRequest) -> ProtocolTraceResponse:
     content_type = real_headers.get("Content-Type", "text/html; charset=UTF-8")
 
     steps: List[ProtocolStep] = []
+    t = 0.0
 
-    # Step 1: DNS Query
+    # Step 1: TCP SYN for DNS Resolver
+    steps.append(
+        ProtocolStep(
+            step_number=1,
+            timestamp_ms=round(t, 1),
+            protocol="TCP",
+            layer="Transport (L4 TCP 3-Way Handshake)",
+            direction="c2s",
+            source_node=client_endpoint,
+            dest_node=dns_endpoint,
+            command="TCP [SYN] Seq=0 Win=65535 MSS=1460 (Port 53/DNS)",
+            status_code=None,
+            summary=f"Client initiates reliable L4 TCP handshake with DNS resolver ({resolved_ip or '8.8.8.8'}:53) via DNS-over-TCP (RFC 7766)",
+            details={
+                "Transport": "TCP port 53",
+                "Flags": "[SYN]",
+                "Mode": "RFC 7766 DNS over TCP",
+                "Source Port": 54192,
+                "Dest Port": 53,
+                "Win": 65535,
+                "MSS": 1460,
+            },
+            raw_wire="TCP SYN: Sport=54192 Dport=53 Seq=0 Ack=0 Flags=[SYN] Win=65535 MSS=1460\r\n",
+            duration_ms=10.0,
+        )
+    )
+    t += 10.0
+
+    # Step 2: TCP SYN-ACK for DNS Resolver
+    steps.append(
+        ProtocolStep(
+            step_number=2,
+            timestamp_ms=round(t, 1),
+            protocol="TCP",
+            layer="Transport (L4 TCP 3-Way Handshake)",
+            direction="s2c",
+            source_node=dns_endpoint,
+            dest_node=client_endpoint,
+            command="TCP [SYN, ACK] Seq=0 Ack=1 Win=65535",
+            status_code="SYN-ACK",
+            summary="DNS resolver accepts and acknowledges TCP connection for reliable query transport",
+            details={
+                "Transport": "TCP port 53",
+                "Flags": "[SYN, ACK]",
+                "Status": "SYN_RECEIVED",
+                "Source Port": 53,
+                "Dest Port": 54192,
+                "Seq": 0,
+                "Ack": 1,
+            },
+            raw_wire="TCP SYN-ACK: Sport=53 Dport=54192 Seq=0 Ack=1 Flags=[SYN, ACK] Win=65535\r\n",
+            duration_ms=9.5,
+        )
+    )
+    t += 9.5
+
+    # Step 3: TCP ACK for DNS Resolver
+    steps.append(
+        ProtocolStep(
+            step_number=3,
+            timestamp_ms=round(t, 1),
+            protocol="TCP",
+            layer="Transport (L4 TCP Handshake Established)",
+            direction="c2s",
+            source_node=client_endpoint,
+            dest_node=dns_endpoint,
+            command="TCP [ACK] Seq=1 Ack=1 (Connection ESTABLISHED)",
+            status_code="ESTABLISHED",
+            summary="TCP 3-way handshake established with DNS resolver on port 53",
+            details={
+                "Transport": "TCP port 53",
+                "Flags": "[ACK]",
+                "Status": "ESTABLISHED",
+                "Source Port": 54192,
+                "Dest Port": 53,
+            },
+            raw_wire="TCP ACK: Sport=54192 Dport=53 Seq=1 Ack=1 Flags=[ACK]\r\n",
+            duration_ms=6.0,
+        )
+    )
+    t += 6.0
+
+    # Step 4: DNS Query (over TCP)
     raw_dns_query = (
         f";; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: {tx_id}\n"
         f";; flags: rd; QUERY: 1, ANSWER: 0, AUTHORITY: 0, ADDITIONAL: 0\n"
@@ -234,30 +432,31 @@ def generate_browsing_trace(req: BrowseRequest) -> ProtocolTraceResponse:
     )
     steps.append(
         ProtocolStep(
-            step_number=1,
-            timestamp_ms=0.0,
+            step_number=4,
+            timestamp_ms=round(t, 1),
             protocol="DNS",
-            layer="Application (L7) over UDP (L4)",
+            layer="Application (L7) over TCP (L4)",
             direction="c2s",
             source_node=client_endpoint,
             dest_node=dns_endpoint,
-            command=f"Standard query {tx_id} A {domain}",
+            command=f"Standard query {tx_id} A {domain} (over TCP)",
             status_code=None,
-            summary=f"Client queries DNS recursive resolver for IPv4 address of '{domain}'",
+            summary=f"Client sends DNS query for IPv4 address of '{domain}' over established L4 TCP connection",
             details={
                 "Transaction ID": tx_id,
                 "Query Type": "A (IPv4)",
                 "Class": "IN (Internet)",
                 "Domain": domain,
                 "Recursion Desired": True,
-                "Transport": "UDP port 53",
+                "Transport": "TCP port 53 (RFC 7766)",
             },
             raw_wire=raw_dns_query,
             duration_ms=18.4,
         )
     )
+    t += 18.4
 
-    # Step 2: DNS Response
+    # Step 5: DNS Response (over TCP)
     raw_dns_resp = (
         f";; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: {tx_id}\n"
         f";; flags: qr rd ra; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 0\n"
@@ -268,10 +467,10 @@ def generate_browsing_trace(req: BrowseRequest) -> ProtocolTraceResponse:
     )
     steps.append(
         ProtocolStep(
-            step_number=2,
-            timestamp_ms=18.4,
+            step_number=5,
+            timestamp_ms=round(t, 1),
             protocol="DNS",
-            layer="Application (L7) over UDP (L4)",
+            layer="Application (L7) over TCP (L4)",
             direction="s2c",
             source_node=dns_endpoint,
             dest_node=client_endpoint,
@@ -284,13 +483,136 @@ def generate_browsing_trace(req: BrowseRequest) -> ProtocolTraceResponse:
                 "Resolved IP": resolved_ip,
                 "TTL": "300 seconds",
                 "Resolution Mode": "Live Socket" if is_live_fetch else "Simulated",
+                "Transport": "TCP port 53",
             },
             raw_wire=raw_dns_resp,
             duration_ms=12.2,
         )
     )
+    t += 12.2
 
-    # Step 3: HTTP Request
+    # Step 6: TCP FIN-ACK for DNS Resolver
+    steps.append(
+        ProtocolStep(
+            step_number=6,
+            timestamp_ms=round(t, 1),
+            protocol="TCP",
+            layer="Transport (L4 TCP Connection Teardown)",
+            direction="c2s",
+            source_node=client_endpoint,
+            dest_node=dns_endpoint,
+            command="TCP [FIN, ACK] DNS Query Complete, Closing Socket",
+            status_code="FIN-ACK",
+            summary="Client gracefully closes TCP connection to DNS resolver",
+            details={"Transport": "TCP port 53", "Flags": "[FIN, ACK]", "Status": "FIN_WAIT_1"},
+            raw_wire="TCP FIN-ACK: Sport=54192 Dport=53 Flags=[FIN, ACK]\r\n",
+            duration_ms=6.0,
+        )
+    )
+    t += 6.0
+
+    # Step 7: TCP ACK for DNS Resolver
+    steps.append(
+        ProtocolStep(
+            step_number=7,
+            timestamp_ms=round(t, 1),
+            protocol="TCP",
+            layer="Transport (L4 TCP Connection Teardown)",
+            direction="s2c",
+            source_node=dns_endpoint,
+            dest_node=client_endpoint,
+            command="TCP [ACK] DNS Socket Closed",
+            status_code="CLOSED",
+            summary="DNS resolver acknowledges socket teardown and closes transmission channel",
+            details={"Transport": "TCP port 53", "Flags": "[ACK]", "Status": "CLOSED"},
+            raw_wire="TCP ACK: Sport=53 Dport=54192 Flags=[ACK]\r\n",
+            duration_ms=5.5,
+        )
+    )
+    t += 5.5
+
+    # Step 8: TCP SYN for Web Server
+    steps.append(
+        ProtocolStep(
+            step_number=8,
+            timestamp_ms=round(t, 1),
+            protocol="TCP",
+            layer="Transport (L4 TCP 3-Way Handshake)",
+            direction="c2s",
+            source_node=client_endpoint,
+            dest_node=server_endpoint,
+            command=f"TCP [SYN] Seq=0 Win=65535 MSS=1460 (Port 80/HTTP)",
+            status_code=None,
+            summary=f"Client initiates reliable L4 TCP handshake with Web Server ({resolved_ip}:80)",
+            details={
+                "Transport": "TCP port 80",
+                "Flags": "[SYN]",
+                "Source Port": 54192,
+                "Dest Port": 80,
+                "Win": 65535,
+                "MSS": 1460,
+            },
+            raw_wire=f"TCP SYN: Sport=54192 Dport=80 Seq=0 Ack=0 Flags=[SYN] Win=65535 MSS=1460\r\n",
+            duration_ms=10.0,
+        )
+    )
+    t += 10.0
+
+    # Step 9: TCP SYN-ACK for Web Server
+    steps.append(
+        ProtocolStep(
+            step_number=9,
+            timestamp_ms=round(t, 1),
+            protocol="TCP",
+            layer="Transport (L4 TCP 3-Way Handshake)",
+            direction="s2c",
+            source_node=server_endpoint,
+            dest_node=client_endpoint,
+            command="TCP [SYN, ACK] Seq=0 Ack=1 Win=65535",
+            status_code="SYN-ACK",
+            summary=f"Web server accepts and acknowledges TCP connection on port 80",
+            details={
+                "Transport": "TCP port 80",
+                "Flags": "[SYN, ACK]",
+                "Status": "SYN_RECEIVED",
+                "Source Port": 80,
+                "Dest Port": 54192,
+                "Seq": 0,
+                "Ack": 1,
+            },
+            raw_wire="TCP SYN-ACK: Sport=80 Dport=54192 Seq=0 Ack=1 Flags=[SYN, ACK] Win=65535\r\n",
+            duration_ms=9.5,
+        )
+    )
+    t += 9.5
+
+    # Step 10: TCP ACK for Web Server
+    steps.append(
+        ProtocolStep(
+            step_number=10,
+            timestamp_ms=round(t, 1),
+            protocol="TCP",
+            layer="Transport (L4 TCP Handshake Established)",
+            direction="c2s",
+            source_node=client_endpoint,
+            dest_node=server_endpoint,
+            command="TCP [ACK] Seq=1 Ack=1 (Connection ESTABLISHED)",
+            status_code="ESTABLISHED",
+            summary=f"TCP 3-way handshake established with Web Server at {resolved_ip}:80",
+            details={
+                "Transport": "TCP port 80",
+                "Flags": "[ACK]",
+                "Status": "ESTABLISHED",
+                "Source Port": 54192,
+                "Dest Port": 80,
+            },
+            raw_wire="TCP ACK: Sport=54192 Dport=80 Seq=1 Ack=1 Flags=[ACK]\r\n",
+            duration_ms=6.0,
+        )
+    )
+    t += 6.0
+
+    # Step 11: HTTP Request
     raw_http_req = (
         f"GET {path} HTTP/1.1\r\n"
         f"Host: {domain}\r\n"
@@ -302,8 +624,8 @@ def generate_browsing_trace(req: BrowseRequest) -> ProtocolTraceResponse:
     )
     steps.append(
         ProtocolStep(
-            step_number=3,
-            timestamp_ms=45.0,
+            step_number=11,
+            timestamp_ms=round(t, 1),
             protocol="HTTP/1.1",
             layer="Application (L7) over TCP (L4)",
             direction="c2s",
@@ -317,13 +639,15 @@ def generate_browsing_trace(req: BrowseRequest) -> ProtocolTraceResponse:
                 "Path": path,
                 "Host": domain,
                 "Connection": "keep-alive",
+                "Transport": "TCP port 80",
             },
             raw_wire=raw_http_req,
             duration_ms=24.6,
         )
     )
+    t += 24.6
 
-    # Step 4: HTTP Response
+    # Step 12: HTTP Response
     http_date = real_headers.get("Date", _get_http_date())
     header_lines = [f"{k}: {v}" for k, v in list(real_headers.items())[:6]]
     headers_str = "\r\n".join(header_lines) if header_lines else f"Server: {server_banner}\r\nContent-Type: {content_type}\r\nContent-Length: {content_length}"
@@ -338,8 +662,8 @@ def generate_browsing_trace(req: BrowseRequest) -> ProtocolTraceResponse:
 
     steps.append(
         ProtocolStep(
-            step_number=4,
-            timestamp_ms=69.6,
+            step_number=12,
+            timestamp_ms=round(t, 1),
             protocol="HTTP/1.1",
             layer="Application (L7) over TCP (L4)",
             direction="s2c",
@@ -355,16 +679,57 @@ def generate_browsing_trace(req: BrowseRequest) -> ProtocolTraceResponse:
                 "Content-Type": content_type,
                 "Payload Size": f"{content_length} bytes",
                 "Fetch Mode": "Live Network Request" if is_live_fetch else "Simulated Template",
+                "Transport": "TCP port 80",
             },
             raw_wire=raw_http_resp,
             duration_ms=22.1,
+        )
+    )
+    t += 22.1
+
+    # Step 13: TCP FIN-ACK for Web Server
+    steps.append(
+        ProtocolStep(
+            step_number=13,
+            timestamp_ms=round(t, 1),
+            protocol="TCP",
+            layer="Transport (L4 TCP Connection Teardown)",
+            direction="c2s",
+            source_node=client_endpoint,
+            dest_node=server_endpoint,
+            command="TCP [FIN, ACK] HTTP Exchange Complete, Closing Socket",
+            status_code="FIN-ACK",
+            summary="Client initiates TCP channel teardown after completing HTTP request",
+            details={"Transport": "TCP port 80", "Flags": "[FIN, ACK]", "Status": "FIN_WAIT_1"},
+            raw_wire="TCP FIN-ACK: Sport=54192 Dport=80 Flags=[FIN, ACK]\r\n",
+            duration_ms=6.0,
+        )
+    )
+    t += 6.0
+
+    # Step 14: TCP ACK for Web Server
+    steps.append(
+        ProtocolStep(
+            step_number=14,
+            timestamp_ms=round(t, 1),
+            protocol="TCP",
+            layer="Transport (L4 TCP Connection Teardown)",
+            direction="s2c",
+            source_node=server_endpoint,
+            dest_node=client_endpoint,
+            command="TCP [ACK] Web Socket Closed",
+            status_code="CLOSED",
+            summary="Web server acknowledges socket closure and terminates TCP channel",
+            details={"Transport": "TCP port 80", "Flags": "[ACK]", "Status": "CLOSED"},
+            raw_wire="TCP ACK: Sport=80 Dport=54192 Flags=[ACK]\r\n",
+            duration_ms=5.5,
         )
     )
 
     return ProtocolTraceResponse(
         mode="browsing",
         title=f"Web Browsing Trace: {domain}",
-        summary=f"DNS lookup resolved {domain} to {resolved_ip} followed by HTTP GET request returning {real_status_code} {real_status_text}.",
+        summary=f"DNS lookup resolved {domain} to {resolved_ip} over L4 TCP (RFC 7766) followed by HTTP GET request over L4 TCP returning {real_status_code} {real_status_text}.",
         total_steps=len(steps),
         steps=steps,
         html_content=real_html,
@@ -374,6 +739,7 @@ def generate_browsing_trace(req: BrowseRequest) -> ProtocolTraceResponse:
             "url": raw_url,
             "status_code": real_status_code,
             "is_live_fetch": is_live_fetch,
+            "transport": "TCP",
             "failed": False,
         },
     )

@@ -22,7 +22,7 @@ from backend.protocol_engine import (
 
 app = FastAPI(
     title="Dual-Panel Protocol Simulator API",
-    description="Backend service providing real-time protocol traces for DNS, HTTP, SMTP, and HLS streaming.",
+    description="Backend service providing real-time protocol traces for DNS, HTTP, SMTP (TCP), and UDP media streaming.",
     version="1.0.0",
 )
 

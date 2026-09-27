@@ -1,0 +1,191 @@
+================================================================================
+            PROTOCOL SIMULATORS - COMPLETE APPLICATION CREATION PROMPTS         
+================================================================================
+
+Total Prompts Recorded: 31
+
+PROMPT #1
+--------------------------------------------------------------------------------
+Create a dual-panel web dashboard in Python (FastAPI + Streamlit).
+
+Left panel: Activity selector with three modes –
+
+• Browsing (URL input + Visit button)
+
+• Mail (compose form: To, Subject, Body + Send button)
+
+• Streaming (Play / Pause + quality selector)
+
+Right panel: Live protocol visualizer that updates in parallel with the left panel:
+
+• Browsing → show DNS query/response followed by full HTTP request/response
+
+• Mail → show complete SMTP conversation (EHLO, MAIL FROM, RCPT TO, DATA, QUIT)
+
+• Streaming → show DNS + HTTP playlist/manifest request + segment requests
+
+Make the right panel animated or step-by-step (pause / next / previous / replay). Keep both
+
+panels synchronized so that every user action on the left immediately triggers the
+
+corresponding protocol visualization on the right.
+
+PROMPT #2
+--------------------------------------------------------------------------------
+down the server
+
+PROMPT #3
+--------------------------------------------------------------------------------
+I want to use terminal to run my app
+
+PROMPT #4
+--------------------------------------------------------------------------------
+Now, can we do these?
+- Browser, make an HTML renderer or simple browser viewer for the fetched data,
+- Mail, make that mail send to the To email,
+- Streaming, will playing the video work for YouTube?
+
+PROMPT #5
+--------------------------------------------------------------------------------
+@[backend/protocol_engine.py] divide this code here into modules for each action
+
+PROMPT #6
+--------------------------------------------------------------------------------
+@[f:\Assignment\backend\protocol_engine\utils.py:L7-L16] what is it doing?
+
+PROMPT #7
+--------------------------------------------------------------------------------
+@[f:\Assignment\backend\protocol_engine\browsing.py:L17] 
+If DNS request fails or the address actually doesn't exist then do show failed and respective error
+
+PROMPT #8
+--------------------------------------------------------------------------------
+@[backend/protocol_engine/mail.py] 
+make it simplified, if toggle for real mail service is on then, if the mail is not sent raise error, and if it's turned off, then simulate mailing is done, note that commands used should be shown too
+
+PROMPT #9
+--------------------------------------------------------------------------------
+@[backend/protocol_engine/streaming.py] and @[backend/protocol_engine/youtube.py] 
+can we not do real streaming of YouTube video while using UDP etc?
+
+PROMPT #10
+--------------------------------------------------------------------------------
+if I have a video in the server part of the code, can we stream it using UDP?
+
+PROMPT #11
+--------------------------------------------------------------------------------
+okay build it, make a system such that, there is a folder where I can put the videos to be streamed and then it is streamed to my frontend, no need for simulator and YouTube
+
+PROMPT #12
+--------------------------------------------------------------------------------
+get rid of the YouTube streaming
+
+PROMPT #13
+--------------------------------------------------------------------------------
+why do I not feel that packet is transmitting? 
+also get rid of any unnecessary code from HLS streaming
+
+PROMPT #14
+--------------------------------------------------------------------------------
+make the streaming such that,
+as the video is sent to the front end I can control the speed, when video is playing every 1 sec 2 packets are sent in real time
+
+PROMPT #15
+--------------------------------------------------------------------------------
+revoke all changes just done
+
+PROMPT #16
+--------------------------------------------------------------------------------
+now in the front end,
+make the design minimalistic, with only light version.
+Make a very simple header, Protocol Simulators.
+add borders to both the panes
+
+PROMPT #17
+--------------------------------------------------------------------------------
+now for the left pane,
+Make the protocol selection part more highlighted, 
+then,
+1. Browsing tab, 
+make the HTML Source view scrollable, 
+2. Mail
+highlight the headings a little
+3. Streaming
+get rid of the rescan
+give a tooltip for Active range and chunk
+fix the poorly working stream chunk controls (check if they are actually working or part of simulation.) if they are part of the simulation add details about how it works and what it means.
+
+other than these changes, add a loading animation when it is loading
+
+PROMPT #18
+--------------------------------------------------------------------------------
+put the videos dir inside the backend
+
+PROMPT #19
+--------------------------------------------------------------------------------
+@[f:\Assignment\frontend\app.py:L325] how is this function working, shouldn't there be a fetch for the video through the protocol like actual streaming?
+
+PROMPT #20
+--------------------------------------------------------------------------------
+do it
+
+PROMPT #21
+--------------------------------------------------------------------------------
+update whatever you like make the streaming realistic live video streaming. if the packets do not arrive video will not play. I can stop the inflow of packets as I wish with a button
+
+PROMPT #22
+--------------------------------------------------------------------------------
+revoke last change
+
+PROMPT #23
+--------------------------------------------------------------------------------
+get rid of Stream Chunk Controls and related
+
+PROMPT #24
+--------------------------------------------------------------------------------
+@[f:\Assignment\frontend\app.py:L386-L395]  what does this do?
+also get rid of Active Range, Size from video details
+
+PROMPT #25
+--------------------------------------------------------------------------------
+okay, now in the right pane
+simply show the steps of the protocol pipeline, in simple chunks, it should be very simplified
+
+PROMPT #26
+--------------------------------------------------------------------------------
+show card for each step the @[f:\Assignment\frontend\app.py:L434-L457]  this part doesn't seem to work
+
+PROMPT #27
+--------------------------------------------------------------------------------
+FAILED (NOERROR) why am I getting this error in 
+Step 02
+
+DNS
+
+Server ➔ Client
+
+FAILED (NOERROR)
+
+PENDING
+
+Standard query response 0x5aba A example.com -> 172.66.147.243
+
+DNS resolver returns A record resolving 'example.com' to 172.66.147.243 (TTL: 300s)
+
+PROMPT #28
+--------------------------------------------------------------------------------
+now optimise the code for deployment
+
+PROMPT #29
+--------------------------------------------------------------------------------
+now where and how should I deploy?
+
+PROMPT #30
+--------------------------------------------------------------------------------
+now in "F:\" make a txt file called prompts.txt where all the prompts are stored from this application creation.
+Note: Corrected 'calle' to 'called'
+
+PROMPT #31
+--------------------------------------------------------------------------------
+modify the code such that it also show sthe transport layer specific steps that is used of TCP for Email and DNS and UDP for Streaming.
+Note: Corrected 'show sthe' to 'shows the'

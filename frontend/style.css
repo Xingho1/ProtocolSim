@@ -182,6 +182,8 @@ code, pre, .mono-font {
 .badge-dns { background: #f0fdfa; color: #0f766e; border: 1px solid #99f6e4; }
 .badge-http { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
 .badge-smtp { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
+.badge-tcp { background: #f5f3ff; color: #6d28d9; border: 1px solid #ddd6fe; }
+.badge-udp { background: #fff7ed; color: #c2410c; border: 1px solid #ffedd5; }
 .badge-stream { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
 
 .arrow-c2s {

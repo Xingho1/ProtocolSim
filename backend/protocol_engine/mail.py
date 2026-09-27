@@ -28,13 +28,15 @@ def _make_step(
     status_code: Optional[str] = None,
     details: Optional[Dict[str, Any]] = None,
     duration_ms: float = 12.0,
+    protocol: str = "SMTP",
+    layer: str = "Application (L7)",
 ) -> ProtocolStep:
     """Helper to construct a ProtocolStep."""
     return ProtocolStep(
         step_number=step_number,
         timestamp_ms=round(timestamp_ms, 1),
-        protocol="SMTP",
-        layer="Application (L7)",
+        protocol=protocol,
+        layer=layer,
         direction=direction,
         source_node=src,
         dest_node=dst,
@@ -45,6 +47,7 @@ def _make_step(
         raw_wire=raw_wire,
         duration_ms=duration_ms,
     )
+
 
 
 def _send_real_smtp(req: MailRequest) -> ProtocolTraceResponse:
@@ -84,6 +87,57 @@ def _send_real_smtp(req: MailRequest) -> ProtocolTraceResponse:
     t = 0.0
 
     try:
+        # L4 TCP Handshake steps
+        steps.append(_make_step(
+            step_number=len(steps) + 1,
+            timestamp_ms=t,
+            direction="c2s",
+            src=client_node,
+            dst=server_node,
+            command=f"TCP [SYN] Seq=0 Win=65535 MSS=1460 (Port {port}/SMTP)",
+            summary=f"Client initiates reliable L4 TCP handshake with SMTP relay at {host}:{port}",
+            details={"Transport": "TCP", "Flags": "[SYN]", "Host": host, "Port": port},
+            raw_wire=f"TCP SYN: Dport={port} Seq=0 Ack=0 Flags=[SYN] Win=65535 MSS=1460\r\n",
+            duration_ms=10.0,
+            protocol="TCP",
+            layer="Transport (L4 TCP 3-Way Handshake)",
+        ))
+        t += 10.0
+
+        steps.append(_make_step(
+            step_number=len(steps) + 1,
+            timestamp_ms=t,
+            direction="s2c",
+            src=server_node,
+            dst=client_node,
+            command="TCP [SYN, ACK] Seq=0 Ack=1 Win=65535",
+            status_code="SYN-ACK",
+            summary=f"SMTP relay accepts L4 TCP connection and returns SYN-ACK",
+            details={"Transport": "TCP", "Flags": "[SYN, ACK]", "Status": "SYN_RECEIVED"},
+            raw_wire=f"TCP SYN-ACK: Sport={port} Seq=0 Ack=1 Flags=[SYN, ACK] Win=65535\r\n",
+            duration_ms=10.0,
+            protocol="TCP",
+            layer="Transport (L4 TCP 3-Way Handshake)",
+        ))
+        t += 10.0
+
+        steps.append(_make_step(
+            step_number=len(steps) + 1,
+            timestamp_ms=t,
+            direction="c2s",
+            src=client_node,
+            dst=server_node,
+            command="TCP [ACK] Seq=1 Ack=1 (Connection ESTABLISHED)",
+            status_code="ESTABLISHED",
+            summary=f"TCP 3-way handshake established with {host}:{port}",
+            details={"Transport": "TCP", "Flags": "[ACK]", "Status": "ESTABLISHED"},
+            raw_wire=f"TCP ACK: Dport={port} Seq=1 Ack=1 Flags=[ACK]\r\n",
+            duration_ms=8.0,
+            protocol="TCP",
+            layer="Transport (L4 TCP Handshake Established)",
+        ))
+        t += 8.0
+
         # 1. Connect
         if port == 465:
             server = smtplib.SMTP_SSL(host, port, timeout=15)
@@ -340,15 +394,51 @@ def _send_real_smtp(req: MailRequest) -> ProtocolTraceResponse:
             raw_wire=f"{quit_code} {quit_text}\r\n",
             duration_ms=8.0,
         ))
+        t += 8.0
+
+        # L4 TCP Connection Teardown
+        steps.append(_make_step(
+            step_number=len(steps) + 1,
+            timestamp_ms=t,
+            direction="c2s",
+            src=client_node,
+            dst=server_node,
+            command="TCP [FIN, ACK] Client closes TCP connection",
+            status_code="FIN-ACK",
+            summary="Client initiates graceful TCP closure after SMTP session teardown",
+            details={"Transport": "TCP", "Flags": "[FIN, ACK]", "Status": "FIN_WAIT_1"},
+            raw_wire=f"TCP FIN-ACK: Dport={port} Flags=[FIN, ACK]\r\n",
+            duration_ms=6.0,
+            protocol="TCP",
+            layer="Transport (L4 TCP Connection Teardown)",
+        ))
+        t += 6.0
+
+        steps.append(_make_step(
+            step_number=len(steps) + 1,
+            timestamp_ms=t,
+            direction="s2c",
+            src=server_node,
+            dst=client_node,
+            command="TCP [ACK] Server closes transmission channel",
+            status_code="CLOSED",
+            summary="SMTP relay acknowledges FIN and closes TCP socket channel",
+            details={"Transport": "TCP", "Flags": "[ACK]", "Status": "CLOSED"},
+            raw_wire=f"TCP ACK: Sport={port} Flags=[ACK]\r\n",
+            duration_ms=6.0,
+            protocol="TCP",
+            layer="Transport (L4 TCP Connection Teardown)",
+        ))
 
         return ProtocolTraceResponse(
             mode="mail",
             title=f"Live SMTP Delivery: {recipient}",
-            summary=f"Real email delivered to {recipient} via {host}:{port}. Commands executed: EHLO, STARTTLS, AUTH, MAIL FROM, RCPT TO, DATA, QUIT.",
+            summary=f"Real email delivered to {recipient} via {host}:{port} over L4 TCP. Commands executed: EHLO, STARTTLS, AUTH, MAIL FROM, RCPT TO, DATA, QUIT.",
             total_steps=len(steps),
             steps=steps,
             metadata={
                 "real_send": True,
+                "transport": "TCP",
                 "host": host,
                 "recipient": recipient,
                 "success": True,
@@ -385,9 +475,42 @@ def _simulate_mail(req: MailRequest) -> ProtocolTraceResponse:
         f".\r\n"
     )
 
-    # All 13 RFC 5321 steps clearly showing the commands used
+    # Complete flow: L4 TCP Handshake (3 steps) + RFC 5321 SMTP (13 steps) + L4 TCP Teardown (2 steps) = 18 steps
     steps_data = [
-        # (direction, command, status_code, summary, details, raw_wire, dur)
+        # (direction, command, status_code, summary, details, raw_wire, dur, protocol, layer)
+        (
+            "c2s",
+            "TCP [SYN] Seq=0 Win=65535 MSS=1460 (Port 25/SMTP)",
+            None,
+            "Client initiates reliable L4 TCP connection to SMTP server via SYN packet",
+            {"Transport": "TCP", "Flags": "[SYN]", "Source Port": 49812, "Dest Port": 25, "Seq": 0, "Ack": 0, "Win": 65535, "MSS": 1460},
+            "TCP SYN: Sport=49812 Dport=25 Seq=0 Ack=0 Flags=[SYN] Win=65535 MSS=1460\r\n",
+            8.0,
+            "TCP",
+            "Transport (L4 TCP 3-Way Handshake)",
+        ),
+        (
+            "s2c",
+            "TCP [SYN, ACK] Seq=0 Ack=1 Win=65535",
+            "SYN-ACK",
+            "SMTP server acknowledges SYN and synchronizes its sequence number",
+            {"Transport": "TCP", "Flags": "[SYN, ACK]", "Source Port": 25, "Dest Port": 49812, "Seq": 0, "Ack": 1, "Win": 65535},
+            "TCP SYN-ACK: Sport=25 Dport=49812 Seq=0 Ack=1 Flags=[SYN, ACK] Win=65535\r\n",
+            7.5,
+            "TCP",
+            "Transport (L4 TCP 3-Way Handshake)",
+        ),
+        (
+            "c2s",
+            "TCP [ACK] Seq=1 Ack=1 (Connection ESTABLISHED)",
+            "ESTABLISHED",
+            "TCP 3-way handshake complete; reliable bi-directional transport channel open for SMTP commands",
+            {"Transport": "TCP", "Flags": "[ACK]", "Status": "ESTABLISHED", "Source Port": 49812, "Dest Port": 25, "Seq": 1, "Ack": 1},
+            "TCP ACK: Sport=49812 Dport=25 Seq=1 Ack=1 Flags=[ACK] Win=65535\r\n",
+            6.0,
+            "TCP",
+            "Transport (L4 TCP Handshake Established)",
+        ),
         (
             "s2c",
             "220 mail.isp-relay.net ESMTP Postfix Service Ready",
@@ -396,6 +519,8 @@ def _simulate_mail(req: MailRequest) -> ProtocolTraceResponse:
             {"Command": "CONNECT", "Service": "ESMTP Postfix", "Host": "mail.isp-relay.net", "Port": 25},
             "220 mail.isp-relay.net ESMTP ready\r\n",
             14.2,
+            "SMTP",
+            "Application (L7)",
         ),
         (
             "c2s",
@@ -405,6 +530,8 @@ def _simulate_mail(req: MailRequest) -> ProtocolTraceResponse:
             {"Command": "EHLO", "Client FQDN": "client.internal.lan"},
             "EHLO client.internal.lan\r\n",
             10.5,
+            "SMTP",
+            "Application (L7)",
         ),
         (
             "s2c",
@@ -414,6 +541,8 @@ def _simulate_mail(req: MailRequest) -> ProtocolTraceResponse:
             {"Command": "EHLO Response", "Extensions": ["PIPELINING", "SIZE 35882577", "8BITMIME", "STARTTLS"]},
             "250-mail.isp-relay.net Hello\r\n250-SIZE 35882577\r\n250-STARTTLS\r\n250 OK\r\n",
             11.8,
+            "SMTP",
+            "Application (L7)",
         ),
         (
             "c2s",
@@ -423,6 +552,8 @@ def _simulate_mail(req: MailRequest) -> ProtocolTraceResponse:
             {"Command": "MAIL FROM", "Sender": sender},
             f"MAIL FROM:<{sender}>\r\n",
             12.0,
+            "SMTP",
+            "Application (L7)",
         ),
         (
             "s2c",
@@ -432,6 +563,8 @@ def _simulate_mail(req: MailRequest) -> ProtocolTraceResponse:
             {"Command": "MAIL FROM Response", "Reply Code": "250", "Enhanced Status": "2.1.0 (Sender OK)"},
             f"250 2.1.0 Ok: Sender <{sender}> accepted\r\n",
             9.4,
+            "SMTP",
+            "Application (L7)",
         ),
         (
             "c2s",
@@ -441,6 +574,8 @@ def _simulate_mail(req: MailRequest) -> ProtocolTraceResponse:
             {"Command": "RCPT TO", "Recipient": recipient},
             f"RCPT TO:<{recipient}>\r\n",
             10.2,
+            "SMTP",
+            "Application (L7)",
         ),
         (
             "s2c",
@@ -450,6 +585,8 @@ def _simulate_mail(req: MailRequest) -> ProtocolTraceResponse:
             {"Command": "RCPT TO Response", "Reply Code": "250", "Enhanced Status": "2.1.5 (Recipient OK)"},
             f"250 2.1.5 Ok: Recipient <{recipient}> verified\r\n",
             11.1,
+            "SMTP",
+            "Application (L7)",
         ),
         (
             "c2s",
@@ -459,6 +596,8 @@ def _simulate_mail(req: MailRequest) -> ProtocolTraceResponse:
             {"Command": "DATA"},
             "DATA\r\n",
             8.6,
+            "SMTP",
+            "Application (L7)",
         ),
         (
             "s2c",
@@ -468,6 +607,8 @@ def _simulate_mail(req: MailRequest) -> ProtocolTraceResponse:
             {"Command": "DATA Response", "Reply Code": "354"},
             "354 End data with <CR><LF>.<CR><LF>\r\n",
             9.1,
+            "SMTP",
+            "Application (L7)",
         ),
         (
             "c2s",
@@ -477,6 +618,8 @@ def _simulate_mail(req: MailRequest) -> ProtocolTraceResponse:
             {"Command": "PAYLOAD", "Subject": subject, "From": sender, "To": recipient, "Bytes": len(raw_rfc5322_email)},
             raw_rfc5322_email,
             25.4,
+            "SMTP",
+            "Application (L7)",
         ),
         (
             "s2c",
@@ -486,6 +629,8 @@ def _simulate_mail(req: MailRequest) -> ProtocolTraceResponse:
             {"Command": "DATA Complete", "Reply Code": "250", "Queue ID": queue_id},
             f"250 2.0.0 Ok: queued as {queue_id}\r\n",
             18.5,
+            "SMTP",
+            "Application (L7)",
         ),
         (
             "c2s",
@@ -495,6 +640,8 @@ def _simulate_mail(req: MailRequest) -> ProtocolTraceResponse:
             {"Command": "QUIT"},
             "QUIT\r\n",
             7.3,
+            "SMTP",
+            "Application (L7)",
         ),
         (
             "s2c",
@@ -504,12 +651,36 @@ def _simulate_mail(req: MailRequest) -> ProtocolTraceResponse:
             {"Command": "QUIT Response", "Reply Code": "221"},
             "221 2.0.0 mail.isp-relay.net Service closing channel\r\n",
             8.0,
+            "SMTP",
+            "Application (L7)",
+        ),
+        (
+            "c2s",
+            "TCP [FIN, ACK] Client initiates TCP closure",
+            "FIN-ACK",
+            "Client initiates graceful TCP connection teardown after SMTP session termination",
+            {"Transport": "TCP", "Flags": "[FIN, ACK]", "Status": "FIN_WAIT_1", "Source Port": 49812, "Dest Port": 25},
+            "TCP FIN-ACK: Sport=49812 Dport=25 Flags=[FIN, ACK]\r\n",
+            6.5,
+            "TCP",
+            "Transport (L4 TCP Connection Teardown)",
+        ),
+        (
+            "s2c",
+            "TCP [ACK] Server closes transmission channel",
+            "CLOSED",
+            "SMTP server acknowledges FIN and closes TCP socket channel",
+            {"Transport": "TCP", "Flags": "[ACK]", "Status": "CLOSED", "Source Port": 25, "Dest Port": 49812},
+            "TCP ACK: Sport=25 Dport=49812 Flags=[ACK]\r\n",
+            6.0,
+            "TCP",
+            "Transport (L4 TCP Connection Teardown)",
         ),
     ]
 
     current_time = 0.0
     steps: List[ProtocolStep] = []
-    for step_num, (direction, cmd, st_code, summary, details, raw, dur) in enumerate(steps_data, start=1):
+    for step_num, (direction, cmd, st_code, summary, details, raw, dur, proto, lyr) in enumerate(steps_data, start=1):
         src = client_node if direction == "c2s" else server_node
         dst = server_node if direction == "c2s" else client_node
         steps.append(
@@ -525,6 +696,8 @@ def _simulate_mail(req: MailRequest) -> ProtocolTraceResponse:
                 details=details,
                 raw_wire=raw,
                 duration_ms=dur,
+                protocol=proto,
+                layer=lyr,
             )
         )
         current_time += dur
@@ -532,7 +705,7 @@ def _simulate_mail(req: MailRequest) -> ProtocolTraceResponse:
     return ProtocolTraceResponse(
         mode="mail",
         title=f"SMTP Mail Conversation: {recipient}",
-        summary=f"Simulated RFC 5321 SMTP dialogue demonstrating commands: EHLO, MAIL FROM, RCPT TO, DATA, and QUIT (Queue ID: {queue_id}).",
+        summary=f"Simulated RFC 5321 SMTP dialogue over L4 TCP (3-way handshake, commands: EHLO, MAIL FROM, RCPT TO, DATA, QUIT, and connection teardown).",
         total_steps=len(steps),
         steps=steps,
         metadata={
@@ -541,6 +714,7 @@ def _simulate_mail(req: MailRequest) -> ProtocolTraceResponse:
             "subject": subject,
             "queue_id": queue_id,
             "real_send": False,
+            "transport": "TCP",
             "commands_used": ["EHLO", "MAIL FROM", "RCPT TO", "DATA", "QUIT"],
         },
     )

@@ -194,10 +194,10 @@ with left_col:
                 """
                 <div style="background: #f8fafc; padding: 10px 14px; border-radius: 6px; border: 1px solid #e2e8f0; margin-bottom: 12px;">
                     <div style="font-size: 0.85rem; font-weight: 700; color: #2563eb; margin-bottom: 2px;">
-                        Web Browser & HTML Renderer
+                        Web Browser & HTML Renderer (DNS & HTTP over TCP)
                     </div>
                     <div style="font-size: 0.76rem; color: #64748b;">
-                        Simulates DNS resolution (UDP 53) and HTTP GET request/response with interactive visual rendering.
+                        Simulates DNS resolution over L4 TCP (RFC 7766) and HTTP GET request/response over L4 TCP with interactive visual rendering.
                     </div>
                 </div>
                 """,
@@ -248,10 +248,10 @@ with left_col:
                 """
                 <div style="background: #f8fafc; padding: 10px 14px; border-radius: 6px; border: 1px solid #e2e8f0; margin-bottom: 12px;">
                     <div style="font-size: 0.85rem; font-weight: 700; color: #d97706; margin-bottom: 2px;">
-                        SMTP Mail Client (RFC 5321)
+                        SMTP Mail Client (RFC 5321 over L4 TCP)
                     </div>
                     <div style="font-size: 0.76rem; color: #64748b;">
-                        Simulates wire-level SMTP conversation (EHLO, MAIL FROM, RCPT TO, DATA, QUIT) with optional relay delivery.
+                        Simulates wire-level SMTP conversation (EHLO, MAIL FROM, RCPT TO, DATA, QUIT) with L4 TCP 3-way handshake and connection teardown.
                     </div>
                 </div>
                 """,
@@ -282,9 +282,9 @@ with left_col:
                 smtp_password = st.text_input("SMTP App Password", type="password", placeholder="16-character app password")
 
             if enable_real_smtp:
-                st.caption("⚡ **Mode:** Live SMTP Relay | **Commands:** EHLO ➔ STARTTLS ➔ AUTH ➔ MAIL FROM ➔ RCPT TO ➔ DATA ➔ QUIT")
+                st.caption("⚡ **Mode:** Live SMTP Relay | **Transport:** TCP | **Commands:** EHLO ➔ STARTTLS ➔ AUTH ➔ MAIL FROM ➔ RCPT TO ➔ DATA ➔ QUIT")
             else:
-                st.caption("ℹ️ **Mode:** Simulation (RFC 5321) | **Commands:** EHLO ➔ MAIL FROM ➔ RCPT TO ➔ DATA ➔ QUIT")
+                st.caption("ℹ️ **Mode:** Simulation (RFC 5321) | **Transport:** TCP | **Commands:** EHLO ➔ MAIL FROM ➔ RCPT TO ➔ DATA ➔ QUIT")
 
             if st.button("📨 Send Email (Execute SMTP Handshake)", type="primary", use_container_width=True):
                 payload = {
@@ -319,16 +319,16 @@ with left_col:
                     if active_trace.get("metadata", {}).get("success"):
                         st.success(f"✅ Real email successfully sent to {mail_to}!")
 
-        # MODE 3: STREAMING (Real Server Video Streaming Engine)
+        # MODE 3: STREAMING (Real Server Video Streaming Engine via UDP)
         elif st.session_state.mode == "Streaming":
             st.markdown(
                 """
                 <div style="background: #f8fafc; padding: 10px 14px; border-radius: 6px; border: 1px solid #e2e8f0; margin-bottom: 12px;">
                     <div style="font-size: 0.85rem; font-weight: 700; color: #16a34a; margin-bottom: 2px;">
-                        Server Video Streaming
+                        UDP Video Streamer
                     </div>
                     <div style="font-size: 0.76rem; color: #64748b;">
-                        Stream video files from the server's <code>backend/videos/</code> directory directly via HTTP 206 Partial Content byte ranges.
+                        Stream video files from the server's <code>backend/videos/</code> directory via connectionless L4 UDP datagram packetization (low latency, zero handshake).
                     </div>
                 </div>
                 """,
@@ -375,7 +375,7 @@ with left_col:
                     is_playing=st.session_state.stream_is_playing,
                 )
 
-                if st.button("📡 Re-Simulate Stream Request", type="primary", use_container_width=True, help="Trigger HTTP 206 stream request simulation in Protocol Visualizer"):
+                if st.button("📡 Re-Simulate Stream Request", type="primary", use_container_width=True, help="Trigger UDP stream datagram simulation in Protocol Visualizer"):
                     trigger_action("stream", {
                         "source_type": "server_file",
                         "video_file": st.session_state.selected_video_file,

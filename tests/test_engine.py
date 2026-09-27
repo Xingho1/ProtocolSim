@@ -16,60 +16,54 @@ from backend.protocol_engine import (
 
 
 def test_browsing_protocol():
-    print("[Testing] Browsing Protocol Trace...")
+    print("[Testing] Browsing Protocol Trace (TCP Handshakes for DNS & HTTP)...")
     req = BrowseRequest(url="https://python.org/downloads")
     trace = generate_browsing_trace(req)
 
     assert trace.mode == "browsing", f"Expected mode 'browsing', got {trace.mode}"
-    assert trace.total_steps == 4, f"Expected 4 steps (DNS Query/Resp, HTTP Req/Resp), got {trace.total_steps}"
+    assert trace.total_steps == 14, f"Expected 14 steps (TCP DNS Handshake/Query/Resp/Teardown + TCP HTTP Handshake/Req/Resp/Teardown), got {trace.total_steps}"
 
-    step1 = trace.steps[0]
-    assert step1.protocol == "DNS"
-    assert step1.direction == "c2s"
-    assert "python.org" in step1.command
+    commands = [s.command for s in trace.steps]
+    protocols = [s.protocol for s in trace.steps]
 
-    step2 = trace.steps[1]
-    assert step2.protocol == "DNS"
-    assert step2.direction == "s2c"
-    assert step2.status_code == "NOERROR"
-    assert "Resolved IP" in step2.details
+    # Verify TCP steps for DNS
+    assert any("TCP [SYN]" in c and "DNS" in c for c in commands), "Missing TCP SYN for DNS"
+    assert any("TCP [SYN, ACK]" in c for c in commands), "Missing TCP SYN-ACK"
+    assert any("TCP [ACK]" in c for c in commands), "Missing TCP ACK"
+    assert "DNS" in protocols, "Missing DNS protocol steps"
+    assert "TCP" in protocols, "Missing TCP protocol steps"
 
-    step3 = trace.steps[2]
-    assert step3.protocol == "HTTP/1.1"
-    assert step3.direction == "c2s"
-    assert "GET /downloads HTTP/1.1" in step3.raw_wire
+    # Verify DNS query and response
+    dns_query_step = next(s for s in trace.steps if s.protocol == "DNS" and s.direction == "c2s")
+    assert "python.org" in dns_query_step.command
 
-    step4 = trace.steps[3]
-    assert step4.protocol == "HTTP/1.1"
-    assert step4.direction == "s2c"
-    assert step4.status_code == "200 OK"
-    assert "text/html" in step4.raw_wire
+    dns_resp_step = next(s for s in trace.steps if s.protocol == "DNS" and s.direction == "s2c")
+    assert dns_resp_step.status_code == "NOERROR"
+    assert "Resolved IP" in dns_resp_step.details
+
+    # Verify TCP steps for Web server & HTTP
+    assert any("TCP [SYN]" in c and "HTTP" in c for c in commands), "Missing TCP SYN for HTTP"
+    assert any("GET /downloads HTTP/1.1" in s.raw_wire for s in trace.steps if s.protocol == "HTTP/1.1")
+    assert any("200 OK" in s.command or "200" in (s.status_code or "") for s in trace.steps if s.protocol == "HTTP/1.1")
     assert trace.html_content is not None, "Expected html_content in browsing trace response"
 
     print("  [OK] Browsing protocol trace passed!")
 
 
 def test_browsing_dns_failure():
-    print("[Testing] Browsing DNS Failure / Non-Existent Domain Trace...")
+    print("[Testing] Browsing DNS Failure / Non-Existent Domain Trace (with TCP transport)...")
     req = BrowseRequest(url="https://nonexistent-fake-domain-12345.xyz")
     trace = generate_browsing_trace(req)
 
     assert trace.mode == "browsing", f"Expected mode 'browsing', got {trace.mode}"
-    assert trace.total_steps == 2, f"Expected 2 steps on DNS failure, got {trace.total_steps}"
+    assert trace.total_steps == 7, f"Expected 7 steps on DNS failure (TCP handshake, DNS Q/R, TCP teardown), got {trace.total_steps}"
     assert trace.metadata.get("failed") is True, "Expected metadata['failed'] to be True"
     assert trace.metadata.get("status_code") == "DNS_PROBE_FINISHED_NXDOMAIN"
 
-    step1 = trace.steps[0]
-    assert step1.protocol == "DNS"
-    assert step1.direction == "c2s"
-    assert "nonexistent-fake-domain-12345.xyz" in step1.command
-
-    step2 = trace.steps[1]
-    assert step2.protocol == "DNS"
-    assert step2.direction == "s2c"
-    assert step2.status_code == "NXDOMAIN"
-    assert "Error" in step2.details
-    assert "NXDOMAIN" in step2.raw_wire
+    commands = [s.command for s in trace.steps]
+    assert any("TCP [SYN]" in c for c in commands), "Missing TCP SYN handshake step"
+    assert any("NXDOMAIN" in c for c in commands), "Missing NXDOMAIN response step"
+    assert any("TCP [FIN, ACK]" in c for c in commands), "Missing TCP teardown step"
 
     assert trace.html_content is not None
     assert "This site can’t be reached" in trace.html_content
@@ -77,7 +71,7 @@ def test_browsing_dns_failure():
 
 
 def test_mail_protocol():
-    print("[Testing] Mail (SMTP) Protocol Trace...")
+    print("[Testing] Mail (SMTP) Protocol Trace (with L4 TCP Handshake & Teardown)...")
     req = MailRequest(
         to="security@corp.net",
         subject="Audit Complete",
@@ -87,19 +81,31 @@ def test_mail_protocol():
     trace = generate_mail_trace(req)
 
     assert trace.mode == "mail", f"Expected mode 'mail', got {trace.mode}"
-    assert trace.total_steps == 13, f"Expected 13 SMTP steps, got {trace.total_steps}"
+    assert trace.total_steps == 18, f"Expected 18 steps (3 TCP Handshake + 13 SMTP + 2 TCP Teardown), got {trace.total_steps}"
+
+    commands = [s.command for s in trace.steps]
+    protocols = [s.protocol for s in trace.steps]
+
+    # Verify TCP Transport layer steps
+    assert "TCP" in protocols, "Missing TCP protocol steps in mail trace"
+    assert any("TCP [SYN]" in c for c in commands), "Missing TCP SYN handshake step"
+    assert any("TCP [SYN, ACK]" in c for c in commands), "Missing TCP SYN-ACK handshake step"
+    assert any("TCP [ACK] Seq=1 Ack=1" in c for c in commands), "Missing TCP ACK established step"
+    assert any("TCP [FIN, ACK]" in c for c in commands), "Missing TCP FIN-ACK teardown step"
 
     # Verify key SMTP commands and codes
-    commands = [s.command for s in trace.steps]
     assert any("220" in c for c in commands), "Missing 220 greeting"
     assert any("EHLO" in c for c in commands), "Missing EHLO"
     assert any("MAIL FROM" in c for c in commands), "Missing MAIL FROM"
     assert any("RCPT TO" in c for c in commands), "Missing RCPT TO"
     assert any("DATA" in c for c in commands), "Missing DATA"
     assert any("354" in c for c in commands), "Missing 354 Start Mail Input"
+    assert any("QUIT" in c for c in commands), "Missing QUIT"
+
     # Verify commands_used metadata
     assert "commands_used" in trace.metadata, "Missing commands_used metadata"
     assert trace.metadata["commands_used"] == ["EHLO", "MAIL FROM", "RCPT TO", "DATA", "QUIT"]
+    assert trace.metadata.get("transport") == "TCP"
 
     print("  [OK] Mail SMTP protocol trace passed!")
 
@@ -165,7 +171,7 @@ def test_modular_imports():
 
 
 def test_server_video_streaming():
-    print("[Testing] Server Video Streaming Engine (HTTP 206 Range)...")
+    print("[Testing] Server Video Streaming Engine (L4 UDP Transport)...")
     from backend.protocol_engine.streaming import list_server_videos
 
     videos = list_server_videos()
@@ -178,16 +184,19 @@ def test_server_video_streaming():
     trace = generate_streaming_trace(req)
 
     assert trace.mode == "streaming"
-    assert trace.total_steps == 6
+    assert trace.total_steps == 4
     assert trace.metadata.get("source_type") == "server_file"
     assert trace.metadata.get("video_file") == sample.filename
-    assert "range_start" in trace.metadata
+    assert trace.metadata.get("transport") == "UDP"
 
     commands = [s.command for s in trace.steps]
-    assert any("TCP [SYN]" in c for c in commands), "Missing TCP SYN handshake step"
-    assert any("GET /api/stream/video/" in c for c in commands), "Missing HTTP Range GET step"
-    assert any("206 Partial Content" in c for c in commands), "Missing HTTP 206 Partial Content step"
-    assert any("Stream Delivery" in c for c in commands), "Missing payload delivery step"
+    protocols = [s.protocol for s in trace.steps]
+
+    assert all(p == "UDP" for p in protocols), f"Expected all steps to be UDP, got {protocols}"
+    assert any("UDP Datagram: Stream Request" in c for c in commands), "Missing UDP Datagram Request step"
+    assert any("UDP Packet Header" in c for c in commands), "Missing UDP Packet Header step"
+    assert any("UDP Media Burst" in c for c in commands), "Missing UDP Media Burst step"
+    assert any("UDP Telemetry" in c for c in commands), "Missing UDP Telemetry step"
 
     # Test FastAPI Range Request handling
     from fastapi.testclient import TestClient
@@ -206,7 +215,7 @@ def test_server_video_streaming():
     assert r_stream.headers["Content-Range"].startswith("bytes 0-1023/")
     assert len(r_stream.content) == 1024
 
-    print("  [OK] Server video streaming and HTTP 206 Partial Content passed!")
+    print("  [OK] Server video streaming and UDP transport steps passed!")
 
 
 if __name__ == "__main__":
